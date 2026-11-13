@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
+import { errorHandler, notFoundHandler } from './middlewares/error-handler.js';
 import { healthRouter } from './routes/health.routes.js';
 import { logger } from './utils/logger.js';
 
@@ -20,6 +21,9 @@ export function createApp({ corsOrigins }: AppOptions): Express {
   app.use(pinoHttp({ logger }));
 
   app.use(healthRouter);
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }

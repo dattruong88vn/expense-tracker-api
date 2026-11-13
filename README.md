@@ -50,9 +50,21 @@ or invalid variables.
 | ------ | --------- | ------------------------ |
 | GET    | `/health` | `200 { "status": "ok" }` |
 
+Errors use the format `{ "error": { "code", "message", "details" } }`. Business errors are raised as
+`AppError(code, status, message)` and rendered by the central error handler; unknown routes return
+`404 NOT_FOUND`, and unexpected errors return `500 INTERNAL_ERROR` without internal detail.
+
 ## Structure
 
 `src/app.ts` builds the Express application without listening (used by Supertest); `src/server.ts`
 loads the environment, connects to MongoDB and listens. Code is layered under `src/` as `routes/`,
 `controllers/`, `services/`, `models/`, `middlewares/`, `schemas/`, `config/` and `utils/`; tests
 live under `tests/integration/`, `tests/unit/` and `tests/helpers/`.
+
+## Contributing
+
+- `npm ci` installs the Git hooks (Husky). The `pre-commit` hook lints and formats staged files
+  (lint-staged); the `commit-msg` hook rejects messages that are not Conventional Commits (commitlint).
+- Branch: `<feat|fix|chore|docs|test>/ET-<n>-<short-description>`.
+- Commits and PR titles: Conventional Commits containing the Jira key, for example
+  `feat(transactions): ET-12 record transaction`. Squash merge only, through a Pull Request.
