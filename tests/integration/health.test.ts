@@ -19,3 +19,14 @@ describe('GET /health', () => {
     expect(res.headers['x-powered-by']).toBeUndefined();
   });
 });
+
+describe('unknown routes', () => {
+  it('return 404 in the standard error format', async () => {
+    const res = await request(app).get('/does-not-exist');
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({
+      error: { code: 'NOT_FOUND', message: 'Resource not found', details: [] },
+    });
+  });
+});
