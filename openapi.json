@@ -195,21 +195,7 @@
             "type": "object",
             "properties": {
               "code": {
-                "type": "string",
-                "enum": [
-                  "VALIDATION_ERROR",
-                  "UNAUTHENTICATED",
-                  "INVALID_GOOGLE_TOKEN",
-                  "FORBIDDEN",
-                  "ACCOUNT_PENDING_DELETION",
-                  "NOT_FOUND",
-                  "ACCOUNT_NOT_FOUND",
-                  "ACCOUNT_NOT_PENDING_DELETION",
-                  "RATE_LIMITED",
-                  "INTERNAL_ERROR"
-                ],
-                "description": "Stable error code. Status and meaning:\n- `VALIDATION_ERROR` (400): the body, query, parameters or headers failed validation; `details` lists the issues.\n- `UNAUTHENTICATED` (401): the bearer token is missing, malformed, altered or expired, or its account no longer exists or is pending deletion; on the test-only router, the `X-Test-Auth-Secret` header is missing or incorrect.\n- `INVALID_GOOGLE_TOKEN` (401): the Google ID token failed verification (signature, expiry, audience or issuer); the message never states which check failed.\n- `FORBIDDEN` (403): the authenticated account may not perform the operation (test-only router: the account is not a test account).\n- `ACCOUNT_PENDING_DELETION` (403): the Google identity belongs to an account pending deletion within the recovery period; no session is issued and `details[0]` carries the remaining time.\n- `NOT_FOUND` (404): the path does not exist (including the test-only router where it is not mounted).\n- `ACCOUNT_NOT_FOUND` (404): no restorable account exists for the Google identity (none exists, or the recovery period has expired).\n- `ACCOUNT_NOT_PENDING_DELETION` (409): restoration was requested for an account that is active.\n- `RATE_LIMITED` (429): the per-IP request limit of the endpoint is exhausted; see the `Retry-After` header.\n- `INTERNAL_ERROR` (500): unexpected server error; no internal detail is disclosed.",
-                "example": "VALIDATION_ERROR"
+                "$ref": "#/components/schemas/ErrorCode"
               },
               "message": {
                 "type": "string",
@@ -219,7 +205,7 @@
               "details": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/ErrorCode"
+                  "$ref": "#/components/schemas/ErrorDetail"
                 },
                 "description": "Empty for every code except `VALIDATION_ERROR` and `ACCOUNT_PENDING_DELETION`."
               }
@@ -237,6 +223,23 @@
         "description": "Standard error format of every non-2xx response."
       },
       "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "VALIDATION_ERROR",
+          "UNAUTHENTICATED",
+          "INVALID_GOOGLE_TOKEN",
+          "FORBIDDEN",
+          "ACCOUNT_PENDING_DELETION",
+          "NOT_FOUND",
+          "ACCOUNT_NOT_FOUND",
+          "ACCOUNT_NOT_PENDING_DELETION",
+          "RATE_LIMITED",
+          "INTERNAL_ERROR"
+        ],
+        "description": "Stable error code. Status and meaning:\n- `VALIDATION_ERROR` (400): the body, query, parameters or headers failed validation; `details` lists the issues.\n- `UNAUTHENTICATED` (401): the bearer token is missing, malformed, altered or expired, or its account no longer exists or is pending deletion; on the test-only router, the `X-Test-Auth-Secret` header is missing or incorrect.\n- `INVALID_GOOGLE_TOKEN` (401): the Google ID token failed verification (signature, expiry, audience or issuer); the message never states which check failed.\n- `FORBIDDEN` (403): the authenticated account may not perform the operation (test-only router: the account is not a test account).\n- `ACCOUNT_PENDING_DELETION` (403): the Google identity belongs to an account pending deletion within the recovery period; no session is issued and `details[0]` carries the remaining time.\n- `NOT_FOUND` (404): the path does not exist (including the test-only router where it is not mounted).\n- `ACCOUNT_NOT_FOUND` (404): no restorable account exists for the Google identity (none exists, or the recovery period has expired).\n- `ACCOUNT_NOT_PENDING_DELETION` (409): restoration was requested for an account that is active.\n- `RATE_LIMITED` (429): the per-IP request limit of the endpoint is exhausted; see the `Retry-After` header.\n- `INTERNAL_ERROR` (500): unexpected server error; no internal detail is disclosed.",
+        "example": "VALIDATION_ERROR"
+      },
+      "ErrorDetail": {
         "type": "object",
         "additionalProperties": {},
         "description": "Structured detail of the error; its shape depends on `code`."
@@ -476,10 +479,10 @@
             }
           },
           "429": {
-            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. The client suggests trying again later.",
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. The client suggests trying again later. The `Retry-After` header is listed in `Access-Control-Expose-Headers`, so a cross-origin client from an allowed origin can read it.",
             "headers": {
               "Retry-After": {
-                "description": "Seconds until the next request from this address can be accepted.",
+                "description": "Seconds until the next request from this address can be accepted. Exposed to allowed cross-origin clients through `Access-Control-Expose-Headers`.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -662,10 +665,10 @@
             }
           },
           "429": {
-            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. Counted separately from `POST /api/v1/auth/google`. The client suggests trying again later.",
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. Counted separately from `POST /api/v1/auth/google`. The client suggests trying again later. The `Retry-After` header is listed in `Access-Control-Expose-Headers`, so a cross-origin client from an allowed origin can read it.",
             "headers": {
               "Retry-After": {
-                "description": "Seconds until the next request from this address can be accepted.",
+                "description": "Seconds until the next request from this address can be accepted. Exposed to allowed cross-origin clients through `Access-Control-Expose-Headers`.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -778,10 +781,10 @@
             }
           },
           "429": {
-            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later.",
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later. The `Retry-After` header is listed in `Access-Control-Expose-Headers`, so a cross-origin client from an allowed origin can read it.",
             "headers": {
               "Retry-After": {
-                "description": "Seconds until the next request from this address can be accepted.",
+                "description": "Seconds until the next request from this address can be accepted. Exposed to allowed cross-origin clients through `Access-Control-Expose-Headers`.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -858,10 +861,10 @@
             }
           },
           "429": {
-            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later.",
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later. The `Retry-After` header is listed in `Access-Control-Expose-Headers`, so a cross-origin client from an allowed origin can read it.",
             "headers": {
               "Retry-After": {
-                "description": "Seconds until the next request from this address can be accepted.",
+                "description": "Seconds until the next request from this address can be accepted. Exposed to allowed cross-origin clients through `Access-Control-Expose-Headers`.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1

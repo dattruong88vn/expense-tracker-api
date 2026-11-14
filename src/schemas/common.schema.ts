@@ -48,10 +48,11 @@ export const errorCodeSchema = z.enum(errorCodes).meta({
     '- `INTERNAL_ERROR` (500): unexpected server error; no internal detail is disclosed.',
   ].join('\n'),
   example: 'VALIDATION_ERROR',
+  id: 'ErrorCode',
 });
 
 const errorDetailSchema = z.record(z.string(), z.unknown()).meta({
-  id: 'ErrorCode',
+  id: 'ErrorDetail',
   description: 'Structured detail of the error; its shape depends on `code`.',
 });
 

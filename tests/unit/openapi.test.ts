@@ -69,10 +69,30 @@ describe('OpenAPI document', () => {
     expect((json.match(/"Retry-After"/g) ?? []).length).toBe(count429);
   });
 
-  it('enumerates every error code in the ErrorResponse schema', () => {
-    const schema = JSON.stringify(doc.components?.schemas?.ErrorResponse);
-    for (const code of errorCodes) expect(schema).toContain(`"${code}"`);
+  it('states on every 429 response that Retry-After is exposed to cross-origin clients', () => {
+    for (const [path, method] of [
+      ['/api/v1/auth/google', 'post'],
+      ['/api/v1/auth/restore', 'post'],
+      ['/api/v1/test/auth/token', 'post'],
+      ['/api/v1/test/users/me', 'delete'],
+    ] as const) {
+      const res429 = operation(path, method).responses?.['429'];
+      expect(JSON.stringify(res429)).toContain('Access-Control-Expose-Headers');
+    }
+  });
+
+  it('enumerates every error code in the ErrorCode schema referenced by ErrorResponse', () => {
+    const schemas = doc.components?.schemas ?? {};
+    const errorCode = schemas.ErrorCode as { enum?: string[] } | undefined;
+    expect([...(errorCode?.enum ?? [])].sort()).toEqual([...errorCodes].sort());
+    expect(JSON.stringify(schemas.ErrorResponse)).toContain('"#/components/schemas/ErrorCode"');
     expect(Object.keys(errorCodeStatus).sort()).toEqual([...errorCodes].sort());
+  });
+
+  it('names the error-details item schema ErrorDetail', () => {
+    const schemas = doc.components?.schemas ?? {};
+    expect(schemas.ErrorDetail).toMatchObject({ type: 'object' });
+    expect(JSON.stringify(schemas.ErrorResponse)).toContain('"#/components/schemas/ErrorDetail"');
   });
 
   it('matches the committed openapi.json (run npm run openapi:generate)', () => {

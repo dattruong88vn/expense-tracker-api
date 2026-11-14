@@ -21,15 +21,15 @@ or invalid variables.
 
 ## Environment variables
 
-| Variable           | Required | Default       | Description                                               |
-| ------------------ | -------- | ------------- | --------------------------------------------------------- |
-| `NODE_ENV`         | No       | `development` | `development`, `test` or `production`                     |
-| `PORT`             | No       | `3000`        | HTTP port                                                 |
-| `MONGODB_URI`      | Yes      |               | MongoDB connection string                                 |
-| `JWT_SECRET`       | Yes      |               | Signing secret for the system JWT, at least 32 characters |
-| `JWT_EXPIRES_IN`   | No       | `7d`          | Session validity                                          |
-| `CORS_ORIGINS`     | No       | empty         | Comma-separated list of allowed web origins               |
-| `GOOGLE_CLIENT_ID` | Yes      |               | OAuth client ID used to verify Google ID tokens           |
+| Variable           | Required | Default       | Description                                                                         |
+| ------------------ | -------- | ------------- | ----------------------------------------------------------------------------------- |
+| `NODE_ENV`         | No       | `development` | `development`, `test` or `production`                                               |
+| `PORT`             | No       | `3000`        | HTTP port                                                                           |
+| `MONGODB_URI`      | Yes      |               | MongoDB connection string                                                           |
+| `JWT_SECRET`       | Yes      |               | Signing secret for the system JWT, at least 32 characters                           |
+| `JWT_EXPIRES_IN`   | No       | `7d`          | Session validity                                                                    |
+| `CORS_ORIGINS`     | No       | empty         | Comma-separated list of allowed web origins; responses to them expose `Retry-After` |
+| `GOOGLE_CLIENT_ID` | Yes      |               | OAuth client ID used to verify Google ID tokens                                     |
 
 `.env` is never committed. Deployed environments receive these values from Azure App Settings.
 

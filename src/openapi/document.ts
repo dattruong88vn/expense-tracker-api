@@ -63,10 +63,11 @@ function buildRegistry(): OpenAPIRegistry {
     '`UNAUTHENTICATED`: the bearer token is missing, malformed, altered or expired, or the account does not exist or is pending deletion. The client clears the stored token and returns to the sign-in screen.',
   );
   const rateLimited = (limit: string): ResponseConfig => ({
-    description: `\`RATE_LIMITED\`: the limit of this endpoint is exhausted: ${limit} The client suggests trying again later.`,
+    description: `\`RATE_LIMITED\`: the limit of this endpoint is exhausted: ${limit} The client suggests trying again later. The \`Retry-After\` header is listed in \`Access-Control-Expose-Headers\`, so a cross-origin client from an allowed origin can read it.`,
     headers: {
       'Retry-After': {
-        description: 'Seconds until the next request from this address can be accepted.',
+        description:
+          'Seconds until the next request from this address can be accepted. Exposed to allowed cross-origin clients through `Access-Control-Expose-Headers`.',
         schema: { type: 'integer', minimum: 1 },
       },
     },
