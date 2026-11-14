@@ -19,5 +19,12 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "eslint.config.js", "commitlint.config.js"]
+  "include": [
+    "src",
+    "scripts",
+    "tests",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "commitlint.config.js"
+  ]
 }

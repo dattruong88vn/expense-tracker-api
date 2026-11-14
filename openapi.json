@@ -1,0 +1,894 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Expense Tracker API",
+    "version": "1.0.0",
+    "description": "REST API of the Expense Tracker. Every path except `/health` is under `/api/v1`. Errors use `{ \"error\": { \"code\", \"message\", \"details\" } }`; see `ErrorResponse` for the enumerated codes. Lists use `{ \"data\": [...], \"meta\": { \"page\", \"limit\", \"total\" } }`. Sign-out has no endpoint: the client removes the stored token (ADR-0003)."
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "Operational endpoints."
+    },
+    {
+      "name": "Auth",
+      "description": "Google sign-in, session, profile, deletion and restoration."
+    },
+    {
+      "name": "test-only",
+      "description": "Automation support (ADR-0005). Mounted only when APP_ENV is test or staging; these operations do not exist in production."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "System session token returned by `POST /api/v1/auth/google`, valid for 7 days. Rejected with 401 `UNAUTHENTICATED` when missing, malformed, altered or expired, or when its account does not exist or is pending deletion."
+      },
+      "testAuthSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Test-Auth-Secret",
+        "description": "Secret of the test-only router (ADR-0005). Not configured in production."
+      }
+    },
+    "schemas": {
+      "SessionResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "System session token: an HS256-signed JWT whose claims are limited to `sub` (the account `id`), `iat` and `exp`. It is valid for 7 days from issuance, there is no refresh token, and it is sent as `Authorization: Bearer <token>`.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiry of the token (its `exp` claim): issuance plus 7 days.",
+            "example": "2026-11-08T01:00:00.000Z"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserProfile"
+          }
+        },
+        "required": [
+          "token",
+          "tokenType",
+          "expiresAt",
+          "user"
+        ],
+        "description": "A new session for an active account."
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$",
+            "description": "Identifier (24 hexadecimal characters).",
+            "example": "6750a1b2c3d4e5f6a7b8c9d0"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email obtained from Google; for display only.",
+            "example": "an.nguyen@example.com"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name obtained from Google, refreshed at each sign-in.",
+            "example": "An Nguyen"
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Avatar URL obtained from Google, or `null` when Google provides none.",
+            "example": "https://lh3.googleusercontent.com/a/example"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "VND"
+            ],
+            "description": "Account currency (BR-02)."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC instant in ISO 8601 format.",
+            "example": "2026-11-01T03:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "avatarUrl",
+          "currency",
+          "status",
+          "createdAt"
+        ],
+        "description": "Profile of the authenticated account (FR-11)."
+      },
+      "AccountStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "pending_deletion"
+        ],
+        "description": "Account status. Every successful response carries `active`.",
+        "example": "active"
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "VALIDATION_ERROR"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "example": "Request validation failed"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "details"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Standard error format for status 400."
+      },
+      "ValidationIssue": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Dot-separated location of the invalid value, prefixed by its source (`body`, `query`, `params` or `headers`).",
+            "example": "body.idToken"
+          },
+          "message": {
+            "type": "string",
+            "example": "Required"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "description": "A single validation issue."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "VALIDATION_ERROR",
+                  "UNAUTHENTICATED",
+                  "INVALID_GOOGLE_TOKEN",
+                  "FORBIDDEN",
+                  "ACCOUNT_PENDING_DELETION",
+                  "NOT_FOUND",
+                  "ACCOUNT_NOT_FOUND",
+                  "ACCOUNT_NOT_PENDING_DELETION",
+                  "RATE_LIMITED",
+                  "INTERNAL_ERROR"
+                ],
+                "description": "Stable error code. Status and meaning:\n- `VALIDATION_ERROR` (400): the body, query, parameters or headers failed validation; `details` lists the issues.\n- `UNAUTHENTICATED` (401): the bearer token is missing, malformed, altered or expired, or its account no longer exists or is pending deletion; on the test-only router, the `X-Test-Auth-Secret` header is missing or incorrect.\n- `INVALID_GOOGLE_TOKEN` (401): the Google ID token failed verification (signature, expiry, audience or issuer); the message never states which check failed.\n- `FORBIDDEN` (403): the authenticated account may not perform the operation (test-only router: the account is not a test account).\n- `ACCOUNT_PENDING_DELETION` (403): the Google identity belongs to an account pending deletion within the recovery period; no session is issued and `details[0]` carries the remaining time.\n- `NOT_FOUND` (404): the path does not exist (including the test-only router where it is not mounted).\n- `ACCOUNT_NOT_FOUND` (404): no restorable account exists for the Google identity (none exists, or the recovery period has expired).\n- `ACCOUNT_NOT_PENDING_DELETION` (409): restoration was requested for an account that is active.\n- `RATE_LIMITED` (429): the per-IP request limit of the endpoint is exhausted; see the `Retry-After` header.\n- `INTERNAL_ERROR` (500): unexpected server error; no internal detail is disclosed.",
+                "example": "VALIDATION_ERROR"
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable English description, for logs and diagnostics only.",
+                "example": "Authentication required"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ErrorCode"
+                },
+                "description": "Empty for every code except `VALIDATION_ERROR` and `ACCOUNT_PENDING_DELETION`."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "details"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Standard error format of every non-2xx response."
+      },
+      "ErrorCode": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "Structured detail of the error; its shape depends on `code`."
+      },
+      "PendingDeletionErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "ACCOUNT_PENDING_DELETION"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "example": "The account is pending deletion"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PendingDeletionDetail"
+                },
+                "minItems": 1,
+                "maxItems": 1
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "details"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Signals an account pending deletion within the recovery period (UC-01 A2). No session is issued and no account data is returned."
+      },
+      "PendingDeletionDetail": {
+        "type": "object",
+        "properties": {
+          "remainingDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Whole days remaining before permanent deletion, rounded down: floor((deletionRequestedAt + 30 days - now) / 24 h). The value 0 means that less than one day remains.",
+            "example": 8
+          },
+          "deletionRequestedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC instant in ISO 8601 format.",
+            "example": "2026-11-01T03:00:00.000Z"
+          },
+          "permanentDeletionAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "deletionRequestedAt plus 30 days; from this instant the account is treated as permanently deleted.",
+            "example": "2026-12-01T03:00:00.000Z"
+          }
+        },
+        "required": [
+          "remainingDays",
+          "deletionRequestedAt",
+          "permanentDeletionAt"
+        ],
+        "description": "Remaining recovery time of an account pending deletion (UC-04)."
+      },
+      "GoogleSignInRequest": {
+        "type": "object",
+        "properties": {
+          "idToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Google ID token (JWT) obtained by the web application from Google Identity Services. Verified on the server (signature, expiry, audience equal to `GOOGLE_CLIENT_ID`, Google issuer); never logged.",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+          }
+        },
+        "required": [
+          "idToken"
+        ],
+        "additionalProperties": false,
+        "description": "Body of `POST /api/v1/auth/google`. Unknown properties are rejected."
+      },
+      "RestoreAccountRequest": {
+        "type": "object",
+        "properties": {
+          "idToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Google ID token (JWT) obtained by the web application from Google Identity Services. Verified on the server (signature, expiry, audience equal to `GOOGLE_CLIENT_ID`, Google issuer); never logged.",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+          }
+        },
+        "required": [
+          "idToken"
+        ],
+        "additionalProperties": false,
+        "description": "Body of `POST /api/v1/auth/restore`: the Google ID token that was presented to `POST /api/v1/auth/google` and answered with `ACCOUNT_PENDING_DELETION`, re-sent while it is unexpired. Unknown properties are rejected."
+      },
+      "TestTokenRequest": {
+        "type": "object",
+        "properties": {
+          "userKey": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "description": "Caller-chosen key of the test account; the account's `googleId` is `test|<userKey>`. The same key reuses the same account.",
+            "example": "api-01-run-4711"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Display name. Defaults to `Test User <userKey>` on creation; when supplied for an existing account it overwrites the stored name, as a Google sign-in does.",
+            "example": "An Nguyen"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email. Defaults to `<userKey>@test.invalid` on creation; when supplied for an existing account it overwrites the stored email.",
+            "example": "an.nguyen@example.com"
+          }
+        },
+        "required": [
+          "userKey"
+        ],
+        "additionalProperties": false,
+        "description": "Body of `POST /api/v1/test/auth/token`. Unknown properties are rejected."
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "The API is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "signInWithGoogle",
+        "summary": "Exchange a Google ID token for a session (UC-01)",
+        "description": "Verifies the Google ID token and identifies the account by the Google subject identifier, never by email (BR-01). Name, email and avatar are refreshed from the token.\n- Active account: 200 with a 7-day session.\n- No account for the identifier: the account (status `active`, currency VND) and the 11 default categories are created (FR-02, FR-03, BR-08); 201 with a session.\n- Account pending deletion for fewer than 30 days: 403 `ACCOUNT_PENDING_DELETION`, no session (UC-01 A2).\n- Account pending deletion for 30 days or more: the old account and all its data are deleted and a new account is initialised; 201 with a session and no restoration signal (UC-01 A3, BR-15).\n\nRate limit: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome.\nNeither the Google ID token nor the issued token is logged (NFR-06).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleSignInRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in to an existing active account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A new account was initialised (first sign-in, or sign-in after the recovery period expired) and signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_ERROR`: the body is not JSON, a required property is missing or invalid, or an unknown property is present.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`INVALID_GOOGLE_TOKEN`: the ID token has an invalid signature, has expired, or carries a wrong audience or issuer. The message is generic and does not state which check failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCOUNT_PENDING_DELETION`: the account is pending deletion and fewer than 30 days have elapsed since the request. No session is issued. The client shows the restoration dialog with `details[0].remainingDays` and keeps the Google ID token in memory for `POST /api/v1/auth/restore`; declining requires no request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingDeletionErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. The client suggests trying again later.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the next request from this address can be accepted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "getCurrentUser",
+        "summary": "Profile of the authenticated account (UC-06)",
+        "description": "Returns only the account identified by the token; reads do not modify the account. Also serves as the session check of the web application.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`UNAUTHENTICATED`: the bearer token is missing, malformed, altered or expired, or the account does not exist or is pending deletion. The client clears the stored token and returns to the sign-in screen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "requestAccountDeletion",
+        "summary": "Request deletion of the authenticated account (UC-03)",
+        "description": "Sets the status to `pending_deletion` and records the request instant (UTC). Every token of the account is rejected with 401 from then on, so the session ends; the client also removes its stored token. The account and its data are permanently deleted 30 days later unless restored. No request body.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deletion requested."
+          },
+          "401": {
+            "description": "`UNAUTHENTICATED`: the bearer token is missing, malformed, altered or expired, or the account does not exist or is pending deletion. The client clears the stored token and returns to the sign-in screen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/restore": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "restoreAccount",
+        "summary": "Restore an account pending deletion (UC-04)",
+        "description": "Verifies the Google ID token exactly as `POST /api/v1/auth/google` does. When the account is pending deletion for fewer than 30 days, sets its status to `active`, clears the request instant, leaves all categories and transactions unchanged, and returns a session (FR-09).\nNo bearer token is involved: an account pending deletion never holds a valid session.\n\nRate-limited per client IP address with the same windows as `POST /api/v1/auth/google`, counted separately.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restored and signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_ERROR`: the body is not JSON, a required property is missing or invalid, or an unknown property is present.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`INVALID_GOOGLE_TOKEN`: the ID token failed verification, typically because it expired while the dialog was open. The client returns to the sign-in screen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`ACCOUNT_NOT_FOUND`: no account exists for the Google identity, or the recovery period of 30 days has expired. The client returns to the sign-in screen; a new sign-in initialises a new account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`ACCOUNT_NOT_PENDING_DELETION`: the account is already active (for example restored from another tab). The client signs in again with `POST /api/v1/auth/google`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 5 requests in any 60 minutes and at most 10 requests in any 24 hours per client IP address, over rolling windows (NFR-03); every request counts, whatever its outcome. Counted separately from `POST /api/v1/auth/google`. The client suggests trying again later.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the next request from this address can be accepted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/test/auth/token": {
+      "post": {
+        "tags": [
+          "test-only"
+        ],
+        "operationId": "testIssueToken",
+        "summary": "Issue a session for a test account (test and staging only)",
+        "description": "Test-only (ADR-0005). This operation does not exist in production. The router is mounted only when `APP_ENV` is `test` or `staging`, `TEST_AUTH_ENABLED` is `true` and `TEST_AUTH_SECRET` holds at least 32 characters; otherwise the path returns 404 `NOT_FOUND` like any unknown path. Every request presents the secret in the `X-Test-Auth-Secret` header (constant-time comparison). Rate-limited to 600 requests per client IP address in any 60 minutes.\n\nCreates or reuses the account whose `googleId` is `test|<userKey>`, applies the same rules as `POST /api/v1/auth/google` (initialisation with the default categories, 403 for an account pending deletion, re-initialisation after the recovery period), and returns a session token identical in form to that of `POST /api/v1/auth/google`.",
+        "security": [
+          {
+            "testAuthSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing test account signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Test account initialised and signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_ERROR`: the body is not JSON, a required property is missing or invalid, or an unknown property is present.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`UNAUTHENTICATED`: the `X-Test-Auth-Secret` header is missing or incorrect, or (where required) the bearer token is invalid; the response does not state which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCOUNT_PENDING_DELETION`: the account is pending deletion and fewer than 30 days have elapsed since the request. No session is issued. The client shows the restoration dialog with `details[0].remainingDays` and keeps the Google ID token in memory for `POST /api/v1/auth/restore`; declining requires no request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingDeletionErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`NOT_FOUND`: the test-only router is not mounted in this environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the next request from this address can be accepted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/test/users/me": {
+      "delete": {
+        "tags": [
+          "test-only"
+        ],
+        "operationId": "testDeleteCurrentUser",
+        "summary": "Permanently delete the authenticated test account (test and staging only)",
+        "description": "Test-only (ADR-0005). This operation does not exist in production. The router is mounted only when `APP_ENV` is `test` or `staging`, `TEST_AUTH_ENABLED` is `true` and `TEST_AUTH_SECRET` holds at least 32 characters; otherwise the path returns 404 `NOT_FOUND` like any unknown path. Every request presents the secret in the `X-Test-Auth-Secret` header (constant-time comparison). Rate-limited to 600 requests per client IP address in any 60 minutes.\n\nImmediately and permanently deletes the account identified by the bearer token and all of its categories and transactions, without a recovery period. Accepts the token of a test account in either status, so that a test that requested deletion can still clean up. Refuses any account whose `googleId` does not start with `test|`.",
+        "security": [
+          {
+            "testAuthSecret": [],
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "`UNAUTHENTICATED`: the `X-Test-Auth-Secret` header is missing or incorrect, or (where required) the bearer token is invalid; the response does not state which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN`: the account is not a test account; nothing is deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`NOT_FOUND`: the test-only router is not mounted in this environment, or the account no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: the limit of this endpoint is exhausted: at most 600 requests in any 60 minutes per client IP address. The client suggests trying again later.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the next request from this address can be accepted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`INTERNAL_ERROR`: unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}
