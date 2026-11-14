@@ -35,24 +35,42 @@ or invalid variables.
 
 ## Scripts
 
-| Script                            | Purpose                                        |
-| --------------------------------- | ---------------------------------------------- |
-| `npm run dev`                     | Development server with reload (tsx)           |
-| `npm run build` / `npm start`     | Compiles to `dist/` / runs the compiled server |
-| `npm run lint` / `npm run format` | ESLint / Prettier                              |
-| `npm run typecheck`               | TypeScript type check                          |
-| `npm test`                        | Unit and integration tests (Vitest, Supertest) |
-| `npm run test:coverage`           | Tests with coverage; fails below 70%           |
+| Script                            | Purpose                                         |
+| --------------------------------- | ----------------------------------------------- |
+| `npm run dev`                     | Development server with reload (tsx)            |
+| `npm run build` / `npm start`     | Compiles to `dist/` / runs the compiled server  |
+| `npm run lint` / `npm run format` | ESLint / Prettier                               |
+| `npm run typecheck`               | TypeScript type check                           |
+| `npm test`                        | Unit and integration tests (Vitest, Supertest)  |
+| `npm run test:coverage`           | Tests with coverage; fails below 70%            |
+| `npm run openapi:generate`        | Regenerates `openapi.json` from the Zod schemas |
 
-## Endpoints
+## API contract
 
-| Method | Path      | Response                 |
-| ------ | --------- | ------------------------ |
-| GET    | `/health` | `200 { "status": "ok" }` |
+`openapi.json` (OpenAPI 3.1) is generated from the Zod schemas in `src/schemas/` by
+`src/openapi/document.ts` and is committed so that the web application can generate its types
+(`npm run gen:api`, openapi-typescript). After any schema change, run `npm run openapi:generate` and
+commit the result; a unit test fails when the committed file differs from the generated document.
 
-Errors use the format `{ "error": { "code", "message", "details" } }`. Business errors are raised as
-`AppError(code, status, message)` and rendered by the central error handler; unknown routes return
-`404 NOT_FOUND`, and unexpected errors return `500 INTERNAL_ERROR` without internal detail.
+| Method | Path                      | Auth                   | Success                       | Errors                       |
+| ------ | ------------------------- | ---------------------- | ----------------------------- | ---------------------------- |
+| GET    | `/health`                 | None                   | `200 { "status": "ok" }`      |                              |
+| POST   | `/api/v1/auth/google`     | None (Google ID token) | `200`/`201` `SessionResponse` | 400, 401, 403, 429, 500      |
+| GET    | `/api/v1/auth/me`         | Bearer                 | `200` `UserProfile`           | 401, 500                     |
+| DELETE | `/api/v1/auth/me`         | Bearer                 | `204`                         | 401, 500                     |
+| POST   | `/api/v1/auth/restore`    | None (Google ID token) | `200` `SessionResponse`       | 400, 401, 404, 409, 429, 500 |
+| POST   | `/api/v1/test/auth/token` | `X-Test-Auth-Secret`   | `200`/`201` `SessionResponse` | 400, 401, 403, 404, 429, 500 |
+| DELETE | `/api/v1/test/users/me`   | Secret and Bearer      | `204`                         | 401, 403, 404, 429, 500      |
+
+The `/api/v1/test` routes (tag `test-only`, ADR-0005) are mounted only when `APP_ENV` is `test` or
+`staging`; they do not exist in production. The system JWT is valid for 7 days and has no refresh
+token; sign-out is a client-side action. An account pending deletion receives
+`403 ACCOUNT_PENDING_DELETION` from sign-in, with `details[0].remainingDays` rounded down.
+
+Errors use the format `{ "error": { "code", "message", "details" } }`, with the codes enumerated in
+the `ErrorResponse` schema. Business errors are raised as `AppError(code, status, message)` and
+rendered by the central error handler; unknown routes return `404 NOT_FOUND`, and unexpected errors
+return `500 INTERNAL_ERROR` without internal detail.
 
 ## Structure
 
