@@ -642,7 +642,7 @@
             }
           },
           "404": {
-            "description": "`ACCOUNT_NOT_FOUND`: no account exists for the Google identity, or the recovery period of 30 days has expired. The client returns to the sign-in screen; a new sign-in initialises a new account.",
+            "description": "`ACCOUNT_NOT_FOUND`: no account exists for the Google identity, or the recovery period of 30 days has expired and the account has been permanently deleted. No session is issued. The client returns the Guest to the sign-in screen; a subsequent `POST /api/v1/auth/google` initialises a new account.",
             "content": {
               "application/json": {
                 "schema": {
@@ -652,7 +652,7 @@
             }
           },
           "409": {
-            "description": "`ACCOUNT_NOT_PENDING_DELETION`: the account is already active (for example restored from another tab). The client signs in again with `POST /api/v1/auth/google`.",
+            "description": "`ACCOUNT_NOT_PENDING_DELETION`: the account is already active (for example, restored from another tab or device). The account is not modified and no session is issued. The client returns the Guest to the sign-in screen, because the Google ID token held for restoration may have expired; a session is obtained only through a new `POST /api/v1/auth/google`.",
             "content": {
               "application/json": {
                 "schema": {

@@ -182,10 +182,10 @@ function buildRegistry(): OpenAPIRegistry {
         '`INVALID_GOOGLE_TOKEN`: the ID token failed verification, typically because it expired while the dialog was open. The client returns to the sign-in screen.',
       ),
       404: error(
-        `\`ACCOUNT_NOT_FOUND\`: no account exists for the Google identity, or the recovery period of ${String(RECOVERY_PERIOD_DAYS)} days has expired. The client returns to the sign-in screen; a new sign-in initialises a new account.`,
+        `\`ACCOUNT_NOT_FOUND\`: no account exists for the Google identity, or the recovery period of ${String(RECOVERY_PERIOD_DAYS)} days has expired and the account has been permanently deleted. No session is issued. The client returns the Guest to the sign-in screen; a subsequent \`POST /api/v1/auth/google\` initialises a new account.`,
       ),
       409: error(
-        '`ACCOUNT_NOT_PENDING_DELETION`: the account is already active (for example restored from another tab). The client signs in again with `POST /api/v1/auth/google`.',
+        '`ACCOUNT_NOT_PENDING_DELETION`: the account is already active (for example, restored from another tab or device). The account is not modified and no session is issued. The client returns the Guest to the sign-in screen, because the Google ID token held for restoration may have expired; a session is obtained only through a new `POST /api/v1/auth/google`.',
       ),
       429: rateLimited(`${SIGN_IN_LIMIT} Counted separately from \`POST /api/v1/auth/google\`.`),
       500: internal,
