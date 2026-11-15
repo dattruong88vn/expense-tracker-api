@@ -23,7 +23,7 @@ jobs:
       # Keep the mongod binary outside node_modules so that npm ci does not delete it and it can be cached.
       MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/../.cache/mongodb-binaries
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
