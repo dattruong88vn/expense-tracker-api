@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  pull_request:
+    # 'edited' re-runs the title check when the PR title changes.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    # Stable job name: registered as the required status check "test" on main.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Keep the mongod binary outside node_modules so that npm ci does not delete it and it can be cached.
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/../.cache/mongodb-binaries
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache mongodb-memory-server binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../.cache/mongodb-binaries
+          key: mongoms-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: mongoms-${{ runner.os }}-
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      # Coverage thresholds (70% lines, functions, branches, statements) are enforced in vitest.config.ts.
+      - run: npm run test:coverage
+      - run: npm run build
+
+  pr-title:
+    # Required check: the PR title is a Conventional Commit containing ET-<n>. Dependabot PRs are exempt (the job is skipped, which satisfies the check).
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|chore|docs|test|ci|build|refactor|perf|style|revert)(\([a-z0-9._/-]+\))?!?: .*\bET-[0-9]+\b'
+          if printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "PR title OK: $TITLE"
+          else
+            echo "::error title=PR title::\"$TITLE\" must be a Conventional Commit containing ET-<n>, for example \"feat(api): ET-12 record transaction\"."
+            exit 1
+          fi

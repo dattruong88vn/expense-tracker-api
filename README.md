@@ -1,5 +1,7 @@
 # expense-tracker-api
 
+[![ci](https://github.com/dattruong88vn/expense-tracker-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dattruong88vn/expense-tracker-api/actions/workflows/ci.yml)
+
 REST API of the Expense Tracker: Express, TypeScript (strict), MongoDB with Mongoose, and Zod validation.
 Work items are tracked in Jira project `ET`; the architecture and conventions are documented in the
 Confluence space `ET`.
