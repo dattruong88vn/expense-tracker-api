@@ -16,7 +16,8 @@ export function createApp({ corsOrigins }: AppOptions): Express {
 
   app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors({ origin: corsOrigins }));
+  // Retry-After is exposed so that the cross-origin web app can read it on 429 responses.
+  app.use(cors({ origin: corsOrigins, exposedHeaders: ['Retry-After'] }));
   app.use(express.json({ limit: '100kb' }));
   app.use(pinoHttp({ logger }));
 

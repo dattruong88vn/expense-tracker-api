@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "openapi:generate": "tsx scripts/generate-openapi.ts",
     "prepare": "husky"
   },
   "dependencies": {
