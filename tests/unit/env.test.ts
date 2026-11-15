@@ -12,7 +12,7 @@ describe('loadEnv', () => {
     const env = loadEnv(valid);
 
     expect(env.NODE_ENV).toBe('development');
-    expect(env.PORT).toBe(3001);
+    expect(env.PORT).toBe(3000);
     expect(env.JWT_EXPIRES_IN).toBe('7d');
     expect(env.CORS_ORIGINS).toEqual([]);
   });
